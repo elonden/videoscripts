@@ -1,17 +1,70 @@
 #!/bin/bash
 
+# convmp4.sh - convert mediafiles to an mp4 format with default parameters as a wrapper for ffmpeg
+#
+#
+# ffmpeg has a enormous arsenal of capabilities which might not always be required when converting media files to have
+# them optimised for Youtube or just general local use
+# This script will assume some default parameters when issue with some initial parameters or otherwise asks for the values you want.
+#
+#
+# Requirements : ffmpeg 3.3
+# Optional : NVidia Cuda enabled GPU with appropriate drivers anbd CUDA API kit installed to significantly increase decoding/encoding speeds.
 
-echo "By default the script will create an mp4 container with h264 encoding as that seems to be the format supported by most devices."
+# Script can be obtained at : https://github.com/elonden/videoscripts
+
+# Copyright 2018 - Erwin van Londen
+
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
+function usage()  {
+
+cat <<- EOF >&2
+By default the script will create an mp4 container with h264 encoding as that seems to be the format supported by most devices.
+
+USAGE: convmp4 [-ay ] <filename of media to be converted>
+    -a - Assume default values
+    -y - Assume values appropriate for uploading to Youtube
+    -h - This help
+EOF
+exit
+}
 
 
 function die() {
+echo "first after die" $1
+case $1 in
+    1) echo "Exited with invalid parameter" ;;
+    2) echo "ffmpeg aborted" ;;
+    *) echo "unknown...." ;;
+esac
 exit 1
+
 }
 
-function convertvideo () {
+function convertvideo() {
 echo "ffmpeg -y -vsync 2 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container"
 #time ffmpeg -y -vsync 0 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,unsharp=lx=7:ly=7:la=1.5:cx=7:cy=7:ca=1.5,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
 time ffmpeg -y -vsync 0 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
+# echo "First after ffmpeg"  $?
+
+if [[ $? -ne 0 ]]; then
+    die $?
+    else
+    return 0
+fi
 }
 
 ## temp cli
@@ -28,18 +81,18 @@ if [[ $1 == "" ]]; then
     die 1
 fi
 
-
-while getopts ay opt
+## The -a is for automatic processing using some defaults I like. The -y is readily accepted by Youtube according to https://support.google.com/youtube/answer/6375112
+while getopts ayh opt
 do
     case $opt in
-        ### Automatic
         a) framerate=30; vencoder=h264_nvenc; vbit=3M; aencoder=aac; abit=128k; audiosr=48000; input=$2; output=$input"_out"; aspect=1920:1080; container=mp4 ;;
         y) framerate=30; vencoder=h264_nvenc; vbit=5M; aencoder=aac; abit=384k; audiosr=48000; input=$2; output=$input"_out"; aspect=1920:1080; container=mp4 ;;
+        h) usage ;;
         i)
 
     esac
     convertvideo
-    die
+    die 1
 done
 
 
@@ -63,7 +116,7 @@ case $venc in
     2) vencoder=hevc ;;
     3) vencoder=h264_nvenc ;;
     4) vencoder=hevc_nvenc ;;
-    *) exit ;;
+    *) die 1 ;;
 esac
 
 ##########################
@@ -87,7 +140,7 @@ case $vbitr in
     5) vbit=512k ;;
     6) vbit=256k ;;
     7) vbit=copy ;;
-    *) exit ;;
+    *) die ;;
 esac
 
 ##########################
@@ -104,7 +157,7 @@ case $aenc in
     2) aencoder=ac3 ;;
     3) aencoder=mp3 ;;
     4) aencoder=copy ;;
-    *) exit ;;
+    *) die 1 ;;
 esac
 
 ##########################
@@ -118,7 +171,7 @@ read -e -i 1 asr
 case $asr in
     1) audiosr=48000 ;;
     2) audiosr=44100 ;;
-    *) exit ;;
+    *) die 1 ;;
 esac
 
 
@@ -137,7 +190,7 @@ case $abitr in
     2) abit=192k ;;
     3) abit=128k ;;
     4) abit=64k ;;
-    *) exit ;;
+    *) die 1 ;;
 esac
 
 # Is hardware accelleration support possible
@@ -169,7 +222,7 @@ case $aspect in
     5) aspect=854:480   ;;
     6) aspect=640:360   ;;
     7) aspect=426:240   ;;
-    *) die              ;;
+    *) die 1            ;;
 esac
 clear
 
