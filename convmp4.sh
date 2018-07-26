@@ -38,18 +38,28 @@ USAGE: convmp4 [-ay ] <filename of media to be converted>
     -a - Assume default values
     -y - Assume values appropriate for uploading to Youtube
     -h - This help
+
+    You can ommit the -a or -y parameters to enter an interactive Q&A sequence to obtain the parameters.
+
+Defaults :
+
+    Video Codec             : h264 or h264_nvenc
+    Container               : mp4
+    Framerate               : 30 fps
+    Video Bitrate           : 3 Mbps
+    Aspecratio              : 1080p
+    Audio Codec             : aac
+    Audio sampling rate     : 48khz
+    Audio bitrate           : a=128kbps ; y= 384kbps
+
+
 EOF
 exit
 }
 
 
 function die() {
-echo "first after die" $1
-case $1 in
-    1) echo "Exited with invalid parameter" ;;
-    2) echo "ffmpeg aborted" ;;
-    *) echo "unknown...." ;;
-esac
+echo "$?"
 exit 1
 
 }
@@ -57,8 +67,7 @@ exit 1
 function convertvideo() {
 echo "ffmpeg -y -vsync 2 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container"
 #time ffmpeg -y -vsync 0 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,unsharp=lx=7:ly=7:la=1.5:cx=7:cy=7:ca=1.5,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
-time ffmpeg -y -vsync 0 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
-# echo "First after ffmpeg"  $?
+ffmpeg -y -vsync 0 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
 
 if [[ $? -ne 0 ]]; then
     die $?
@@ -87,9 +96,7 @@ do
     case $opt in
         a) framerate=30; vencoder=h264_nvenc; vbit=3M; aencoder=aac; abit=128k; audiosr=48000; input=$2; output=$input"_out"; aspect=1920:1080; container=mp4 ;;
         y) framerate=30; vencoder=h264_nvenc; vbit=5M; aencoder=aac; abit=384k; audiosr=48000; input=$2; output=$input"_out"; aspect=1920:1080; container=mp4 ;;
-        h) usage ;;
-        i)
-
+        *|h) usage ;;
     esac
     convertvideo
     die 1
@@ -103,7 +110,7 @@ container=mp4
 
 ##########################
 #select the video encoder
-echo " Select the video encoder
+echo " Select the video encoder (If you do not have a NVidia GPU supporting hardware assisted decoding/encoding use 1 or 2)
 1. h264
 2. h265
 3. h264_nvenc (hardware assist)
