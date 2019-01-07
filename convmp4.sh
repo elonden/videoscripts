@@ -65,15 +65,33 @@ exit 1
 }
 
 function convertvideo() {
-echo "ffmpeg -y -vsync 2 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container"
-#time ffmpeg -y -vsync 0 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,unsharp=lx=7:ly=7:la=1.5:cx=7:cy=7:ca=1.5,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
-ffmpeg -y -vsync 0 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
+
+# Check if two pass configuration is required (off by default)
+if [[ $pass -eq 2 ]]; then
+    #echo "ffmpeg -y -vsync 2 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container"
+    #time ffmpeg -y -vsync 0 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,unsharp=lx=7:ly=7:la=1.5:cx=7:cy=7:ca=1.5,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
+    ffmpeg -y -vsync 0 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -pass 1 -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr -f rawvideo /dev/null
+    ffmpeg -y -vsync 0 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -pass 2 -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
+else
+    ffmpeg -y -vsync 0 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
+fi
 
 if [[ $? -ne 0 ]]; then
     die $?
     else
     return 0
 fi
+
+#TODO
+if [[ $thumbnail == y ]]; then
+# Get the duration of the film
+    duration=$(ffprobe $input | grep duration | cut -f 2)
+
+    for i in 1..$thumbnum ; do
+        t=$(($i -0.5))
+    done
+fi
+
 }
 
 ## temp cli
@@ -91,11 +109,12 @@ if [[ $1 == "" ]]; then
 fi
 
 ## The -a is for automatic processing using some defaults I like. The -y is readily accepted by Youtube according to https://support.google.com/youtube/answer/6375112
-while getopts ayh opt
+while getopts ayht opt
 do
     case $opt in
-        a) framerate=30; vencoder=h264_nvenc; vbit=3M; aencoder=aac; abit=128k; audiosr=48000; input=$2; output=$input"_out"; aspect=1920:1080; container=mp4 ;;
-        y) framerate=30; vencoder=h264_nvenc; vbit=5M; aencoder=aac; abit=384k; audiosr=48000; input=$2; output=$input"_out"; aspect=1920:1080; container=mp4 ;;
+        a) framerate=30; vencoder=h264_nvenc; pass=1; vbit=3M; aencoder=aac; abit=128k; audiosr=48000; input=$2; output=$input"_out"; aspect=1920:1080; container=mp4 ;;
+        y) framerate=30; vencoder=h264_nvenc; pass=1; vbit=5M; aencoder=aac; abit=384k; audiosr=48000; input=$2; output=$input"_out"; aspect=1920:1080; container=mp4 ;;
+        t) tumbnail="y"; thumbnum=$OPTARG ;;
         *|h) usage ;;
     esac
     convertvideo
@@ -149,6 +168,21 @@ case $vbitr in
     7) vbit=copy ;;
     *) die ;;
 esac
+
+##########################
+# 1 or 2 pass
+echo "1 or 2 pass encoding ?
+2 pass normally give better results on the actual required size.
+1. 1-pass
+2. 2-pass
+"
+read -e -i 1 runpass
+case $runpass in
+    1) pass=1;;
+    2) pass=2;;
+    *) die ;;
+esac
+
 
 ##########################
 #select the audio encoder
@@ -232,5 +266,6 @@ case $aspect in
     *) die 1            ;;
 esac
 clear
+
 
 convertvideo
