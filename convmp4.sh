@@ -13,7 +13,7 @@
 
 # Script can be obtained at : https://github.com/elonden/videoscripts
 
-# Copyright 2018 - Erwin van Londen
+# Copyright 2018 - 2019 - Erwin van Londen
 
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -30,7 +30,6 @@
 
 
 function usage()  {
-
 cat <<- EOF >&2
 By default the script will create an mp4 container with h264 encoding as that seems to be the format supported by most devices.
 
@@ -66,14 +65,21 @@ exit 1
 
 function convertvideo() {
 
+
+trap "rm -f $output"".$container" 2 15
+
 # Check if two pass configuration is required (off by default)
 if [[ $pass -eq 2 ]]; then
     #echo "ffmpeg -y -vsync 2 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container"
     #time ffmpeg -y -vsync 0 -hide_banner -hwaccel cuvid -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,unsharp=lx=7:ly=7:la=1.5:cx=7:cy=7:ca=1.5,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
-    ffmpeg -y -vsync 0 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -pass 1 -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr -f rawvideo /dev/null
-    ffmpeg -y -vsync 0 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -pass 2 -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
+    #ffmpeg -y -vsync 0 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -pass 1 -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr -f rawvideo /dev/null
+    #ffmpeg -y -vsync 0 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -pass 2 -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
+    eval ffmpeg -y -vsync 0 -hide_banner $cli -pass 1 $output"".$container
+    eval ffmpeg -y -vsync 0 -hide_banner $cli -pass 2 $output"".$container
+
 else
-    ffmpeg -y -vsync 0 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
+#    ffmpeg -y -vsync 0 -hide_banner -hwaccel cuda -i $input -r $framerate -c:v $vencoder -filter_complex "yadif=parity=tff:deint=all,scale=$aspect" -b:v $vbit -c:a $aencoder -b:a $abit -ar $audiosr $output"".$container
+    eval ffmpeg -y -vsync 0 -hide_banner $cli $output"".$container
 fi
 
 if [[ $? -ne 0 ]]; then
@@ -103,29 +109,33 @@ fi
 ### ffmpeg -y -hwaccel cuvid -vsync 0 -i M2U00357.MPG -c:v h264_nvenc -preset llhq -filter_complex "yadif=parity=tff:deint=all,unsharp=lx=7:ly=7:la=1.5:cx=7:cy=7:ca=1.5,scale=1920:1080 -c:a aac -ac 2 M2U00357_2.mp4
 
 if [[ $1 == "" ]]; then
-    echo "Need the input file"
-    ls -1
+    echo "Need the input file. use -h for help"
+    ls -1 $PWD
     die 1
 fi
+
 
 ## The -a is for automatic processing using some defaults I like. The -y is readily accepted by Youtube according to https://support.google.com/youtube/answer/6375112
 while getopts ayht opt
 do
     case $opt in
-        a) framerate=30; vencoder=h264_nvenc; pass=1; vbit=3M; aencoder=aac; abit=128k; audiosr=48000; input=$2; output=$input"_out"; aspect=1920:1080; container=mp4 ;;
-        y) framerate=30; vencoder=h264_nvenc; pass=1; vbit=5M; aencoder=aac; abit=384k; audiosr=48000; input=$2; output=$input"_out"; aspect=1920:1080; container=mp4 ;;
+        a) input=$2;output=$2_out;container=mp4;cli="-hwaccel cuda -i "$input" -c:v h264_nvenc -b:v 3M -c:a aac -ar 48000 -b:a 128k -r 30 -filter_complex \"yadif=parity=tff:deint=all,scale=1920:1080\"";;
+        y) input=$2;output=$2_out;container=mp4;cli="-hwaccel cuda -i "$input" -c:v h264_nvenc -b:v 5M -c:a aac -ar 48000 -b:a 384k -r 30 -filter_complex \"yadif=parity=tff:deint=all,scale=1920:1080\"";;
         t) tumbnail="y"; thumbnum=$OPTARG ;;
         *|h) usage ;;
     esac
+    eval echo $cli
     convertvideo
     die 1
 done
 
-
-#Get the input file
+#Set variables
 input=$1
 output=$1_out
+## mp4 is the default container
 container=mp4
+
+
 
 ##########################
 #select the video encoder
@@ -138,10 +148,10 @@ echo " Select the video encoder (If you do not have a NVidia GPU supporting hard
 
 read -e -i 3 venc
 case $venc in
-    1) vencoder=h264 ;;
-    2) vencoder=hevc ;;
-    3) vencoder=h264_nvenc ;;
-    4) vencoder=hevc_nvenc ;;
+    1) vencoder=h264;cli="$cli -i $input" ;;
+    2) vencoder=hevc;cli="$cli -i $input" ;;
+    3) vencoder=h264_nvenc; cli="-hwaccel cuda -i $input -c:v $vencoder" ;;
+    4) vencoder=hevc_nvenc; cli="-hwaccel cuda -i $input -c:v $vencoder" ;;
     *) die 1 ;;
 esac
 
@@ -168,6 +178,7 @@ case $vbitr in
     7) vbit=copy ;;
     *) die ;;
 esac
+cli="$cli -b:v $vbit"
 
 ##########################
 # 1 or 2 pass
@@ -179,10 +190,10 @@ echo "1 or 2 pass encoding ?
 read -e -i 1 runpass
 case $runpass in
     1) pass=1;;
-    2) pass=2;;
+    2) pass=2;cli="$cli -pass $pass";;
     *) die ;;
 esac
-
+#cli="$cli -pass $pass"
 
 ##########################
 #select the audio encoder
@@ -200,6 +211,8 @@ case $aenc in
     4) aencoder=copy ;;
     *) die 1 ;;
 esac
+cli="$cli -c:a $aencoder"
+
 
 ##########################
 # Select Audio Sample rate
@@ -214,6 +227,7 @@ case $asr in
     2) audiosr=44100 ;;
     *) die 1 ;;
 esac
+cli="$cli -ar $audiosr"
 
 
 ##########################
@@ -233,6 +247,8 @@ case $abitr in
     4) abit=64k ;;
     *) die 1 ;;
 esac
+cli="$cli -b:a $abit"
+
 
 # Is hardware accelleration support possible
 hw=y
@@ -241,7 +257,7 @@ hw=y
 # Select frame rate
 echo "Select frame rate (24,30,60)"
 read -e -i 30 framerate
-
+cli="$cli -r $framerate"
 
 #############################
 # Select Aspect ratio
@@ -266,6 +282,7 @@ case $aspect in
     *) die 1            ;;
 esac
 clear
+cli="$cli -filter_complex \"yadif=parity=tff:deint=all,scale=$aspect\""
 
-
+eval echo $cli
 convertvideo
