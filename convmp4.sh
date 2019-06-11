@@ -36,9 +36,10 @@ By default the script will create an mp4 container with h264 encoding as that se
 USAGE: convmp4 [-ay ] <filename of media to be converted>
     -a - Assume default values
     -y - Assume values appropriate for uploading to Youtube
+    -s - Assume values that will keep or reduce filesize at a cost of quality and size.
     -h - This help
 
-    You can ommit the -a or -y parameters to enter an interactive Q&A sequence to obtain the parameters.
+    You can ommit the -a -s or -y parameters to enter an interactive Q&A sequence to obtain the parameters.
 
 Defaults :
 
@@ -116,11 +117,12 @@ fi
 
 
 ## The -a is for automatic processing using some defaults I like. The -y is readily accepted by Youtube according to https://support.google.com/youtube/answer/6375112
-while getopts ayht opt
+while getopts aysht opt
 do
     case $opt in
         a) input=$2;output=$2_out;container=mp4;cli="-hwaccel cuda -i "$input" -c:v h264_nvenc -b:v 3M -c:a aac -ar 48000 -b:a 128k -r 30 -filter_complex \"yadif=parity=tff:deint=all,scale=1920:1080\"";;
         y) input=$2;output=$2_out;container=mp4;cli="-hwaccel cuda -i "$input" -c:v h264_nvenc -b:v 5M -c:a aac -ar 48000 -b:a 384k -r 30 -filter_complex \"yadif=parity=tff:deint=all,scale=1920:1080\"";;
+        s) input=$2;output=$2_out;container=mp4;cli="-hwaccel cuda -i "$input" -c:v h264_nvenc -b:v 1M -c:a aac -ar 44100 -b:a 128k -r 24 -filter_complex \"yadif=parity=tff:deint=all,scale=1280:720\"";;
         t) tumbnail="y"; thumbnum=$OPTARG ;;
         *|h) usage ;;
     esac
